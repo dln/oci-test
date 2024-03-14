@@ -41,12 +41,10 @@ async fn unpack_image(image_data: oci_distribution::client::ImageData) -> std::i
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let fmt_layer = tracing_subscriber::fmt::layer();
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::from_default_env())
-        .with(fmt_layer)
+        .with(tracing_subscriber::fmt::layer())
         .init();
-
 
     let image_data = pull_image("docker.io/library/alpine:latest").await?;
     unpack_image(image_data).await?;
