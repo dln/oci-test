@@ -8,8 +8,8 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 #[tracing::instrument()]
-async fn pull_image(image: &str) -> Result<ImageData, oci_distribution::errors::OciDistributionError> {
-    let reference = Reference::try_from(image).unwrap();
+async fn pull_image(image: &str) -> Result<ImageData, Box<dyn std::error::Error>> {
+    let reference = Reference::try_from(image)?;
     let auth = RegistryAuth::Anonymous;
     let config = ClientConfig {
         protocol: ClientProtocol::Https,
@@ -24,7 +24,7 @@ async fn pull_image(image: &str) -> Result<ImageData, oci_distribution::errors::
         manifest::IMAGE_DOCKER_LAYER_TAR_MEDIA_TYPE, // Docker
         manifest::IMAGE_DOCKER_LAYER_GZIP_MEDIA_TYPE,
     ];
-    return client.pull(&reference, &auth, types).await;
+    Ok(client.pull(&reference, &auth, types).await?)
 }
 
 #[tracing::instrument(skip(image_data))]
