@@ -17,7 +17,7 @@ async fn pull_image(image: &str) -> Result<ImageData, Box<dyn std::error::Error>
     };
     let mut client = Client::new(config);
 
-    tracing::info!("Pulling image: {:?}", image);
+    tracing::info!(image = image, "Pulling image");
     let types = vec![
         manifest::IMAGE_LAYER_MEDIA_TYPE, // OCI
         manifest::IMAGE_LAYER_GZIP_MEDIA_TYPE,
