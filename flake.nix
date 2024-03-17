@@ -30,7 +30,7 @@
         ];
       });
 
-    in 
+    in
     {
       packages = forEachSupportedSystem ({ pkgs, devPkgs, lib }: rec {
         default = builder;

@@ -10,6 +10,7 @@ flate2 = "1.0.22"
 libcontainer = "0.3.2"
 nix = "0.27.1"
 oci-distribution = "0.10.0"
+serde_json = "1.0.114"
 tar = "0.4.38"
 tokio = { version = "1.36.0", features = ["full"] }
 tracing = "0.1.40"

@@ -1,7 +1,10 @@
 use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 use libcontainer::container::builder::ContainerBuilder;
-use libcontainer::oci_spec::runtime::Spec;
+use libcontainer::oci_spec::runtime::{
+    LinuxBuilder, LinuxIdMappingBuilder, LinuxNamespace, LinuxNamespaceBuilder, LinuxNamespaceType,
+    Mount, Spec,
+};
 use libcontainer::syscall::syscall::SyscallType;
 use libcontainer::workload::{Executor, ExecutorError, ExecutorValidationError};
 use nix::{
@@ -16,7 +19,11 @@ use oci_distribution::client::*;
 use oci_distribution::manifest;
 use oci_distribution::secrets::RegistryAuth;
 use oci_distribution::Reference;
-use std::io::Cursor;
+use serde_json::to_writer_pretty;
+use std::fs::File;
+use std::io::{BufWriter, Cursor, Write};
+use std::path::Path;
+use std::path::PathBuf;
 use tar::Archive;
 use tracing_subscriber::prelude::*;
 
@@ -95,12 +102,13 @@ pub fn get_rootless() -> Result<Spec> {
         }
     }
 
-    let mut spec = get_default()?;
+    let mut spec = Spec::default();
     spec.set_linux(Some(linux)).set_mounts(Some(mounts));
     Ok(spec)
 }
 
 pub fn spec() -> Result<()> {
+    tracing::info!("Creating container spec");
     let spec = get_rootless()?;
 
     // write data to config.json
@@ -110,7 +118,6 @@ pub fn spec() -> Result<()> {
     writer.flush()?;
     Ok(())
 }
-
 
 #[tracing::instrument()]
 async fn pull_image(image: &str) -> Result<ImageData, Box<dyn std::error::Error>> {
@@ -248,6 +255,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let image_data = pull_image("docker.io/library/alpine:latest").await?;
     unpack_image(image_data).await?;
+    spec()?;
     run_container()?;
     Ok(())
 }
