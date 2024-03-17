@@ -33,6 +33,85 @@ impl Executor for MyExecutor {
     }
 }
 
+pub fn get_rootless() -> Result<Spec> {
+    // Remove network and user namespace from the default spec
+    let mut namespaces: Vec<LinuxNamespace> =
+        libcontainer::oci_spec::runtime::get_default_namespaces()
+            .into_iter()
+            .filter(|ns| {
+                ns.typ() != LinuxNamespaceType::Network && ns.typ() != LinuxNamespaceType::User
+            })
+            .collect();
+
+    // Add user namespace
+    namespaces.push(
+        LinuxNamespaceBuilder::default()
+            .typ(LinuxNamespaceType::User)
+            .build()?,
+    );
+
+    let uid = nix::unistd::geteuid().as_raw();
+    let gid = nix::unistd::getegid().as_raw();
+
+    let linux = LinuxBuilder::default()
+        .namespaces(namespaces)
+        .uid_mappings(vec![LinuxIdMappingBuilder::default()
+            .host_id(uid)
+            .container_id(0_u32)
+            .size(1_u32)
+            .build()?])
+        .gid_mappings(vec![LinuxIdMappingBuilder::default()
+            .host_id(gid)
+            .container_id(0_u32)
+            .size(1_u32)
+            .build()?])
+        .build()?;
+
+    // Prepare the mounts
+
+    let mut mounts: Vec<Mount> = libcontainer::oci_spec::runtime::get_default_mounts();
+    for mount in &mut mounts {
+        if mount.destination().eq(Path::new("/sys")) {
+            mount
+                .set_source(Some(PathBuf::from("/sys")))
+                .set_typ(Some(String::from("none")))
+                .set_options(Some(vec![
+                    "rbind".to_string(),
+                    "nosuid".to_string(),
+                    "noexec".to_string(),
+                    "nodev".to_string(),
+                    "ro".to_string(),
+                ]));
+        } else {
+            let options: Vec<String> = mount
+                .options()
+                .as_ref()
+                .unwrap_or(&vec![])
+                .iter()
+                .filter(|&o| !o.starts_with("gid=") && !o.starts_with("uid="))
+                .map(|o| o.to_string())
+                .collect();
+            mount.set_options(Some(options));
+        }
+    }
+
+    let mut spec = get_default()?;
+    spec.set_linux(Some(linux)).set_mounts(Some(mounts));
+    Ok(spec)
+}
+
+pub fn spec() -> Result<()> {
+    let spec = get_rootless()?;
+
+    // write data to config.json
+    let file = File::create("test/config.json")?;
+    let mut writer = BufWriter::new(file);
+    to_writer_pretty(&mut writer, &spec)?;
+    writer.flush()?;
+    Ok(())
+}
+
+
 #[tracing::instrument()]
 async fn pull_image(image: &str) -> Result<ImageData, Box<dyn std::error::Error>> {
     let reference = Reference::try_from(image)?;
@@ -60,7 +139,7 @@ async fn unpack_image(image_data: oci_distribution::client::ImageData) -> std::i
         let tar_gz = Cursor::new(layer.data);
         let tar = GzDecoder::new(tar_gz);
         let mut archive = Archive::new(tar);
-        archive.unpack("/tmp/container/rootfs")?;
+        archive.unpack("test/rootfs")?;
     }
     Ok(())
 }
@@ -70,13 +149,13 @@ fn run_container() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(container_id, "Creating container");
     let mut container = ContainerBuilder::new(container_id.to_owned(), SyscallType::default())
         .with_executor(MyExecutor {})
-        .with_pid_file(Some("/tmp/container/container.pid"))
+        .with_pid_file(Some("test/container.pid"))
         .expect("invalid pid file")
-        // .with_console_socket(Some("/dev/stderr"))
-        .with_root_path("/tmp/container")
+        // .with_console_socket(Some("/tmp/container/console.sock"))
+        .with_root_path("test")
         .expect("invalid root path")
         .validate_id()?
-        .as_init("/tmp/container")
+        .as_init("test")
         .with_systemd(false)
         .with_detach(false)
         .build()?;

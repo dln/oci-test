@@ -1,1 +1,7 @@
+/result
 /target
+/test
+.direnv
+.envrc
+.git
+.task
