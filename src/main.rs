@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use clap::Parser;
 use flate2::read::GzDecoder;
 use libcontainer::container::builder::ContainerBuilder;
 use libcontainer::oci_spec::runtime::{
@@ -22,10 +23,16 @@ use oci_distribution::Reference;
 use serde_json::to_writer_pretty;
 use std::fs::File;
 use std::io::{BufWriter, Cursor, Write};
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tar::Archive;
 use tracing_subscriber::prelude::*;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value = "test")]
+    path: PathBuf,
+}
 
 #[derive(Clone)]
 pub struct MyExecutor {}
@@ -107,12 +114,12 @@ pub fn get_rootless() -> Result<Spec> {
     Ok(spec)
 }
 
-pub fn spec() -> Result<()> {
+pub fn spec(root: &Path) -> Result<()> {
     tracing::info!("Creating container spec");
     let spec = get_rootless()?;
 
     // write data to config.json
-    let file = File::create("test/config.json")?;
+    let file = File::create(Path::join(root, "config.json"))?;
     let mut writer = BufWriter::new(file);
     to_writer_pretty(&mut writer, &spec)?;
     writer.flush()?;
@@ -140,29 +147,33 @@ async fn pull_image(image: &str) -> Result<ImageData, Box<dyn std::error::Error>
 }
 
 #[tracing::instrument(skip(image_data))]
-async fn unpack_image(image_data: oci_distribution::client::ImageData) -> std::io::Result<()> {
+async fn unpack_image(
+    image_data: oci_distribution::client::ImageData,
+    path: &std::path::Path,
+) -> std::io::Result<()> {
     tracing::info!("Unpacking image");
     for layer in image_data.layers {
         let tar_gz = Cursor::new(layer.data);
         let tar = GzDecoder::new(tar_gz);
         let mut archive = Archive::new(tar);
-        archive.unpack("test/rootfs")?;
+        archive.unpack(path)?;
     }
     Ok(())
 }
 
-fn run_container() -> Result<(), Box<dyn std::error::Error>> {
+fn run_container(root: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let container_id = "my-container";
+    let pid_file = Path::join(root, "container.pid");
     tracing::info!(container_id, "Creating container");
     let mut container = ContainerBuilder::new(container_id.to_owned(), SyscallType::default())
         .with_executor(MyExecutor {})
-        .with_pid_file(Some("test/container.pid"))
+        .with_pid_file(Some(pid_file))
         .expect("invalid pid file")
         // .with_console_socket(Some("/tmp/container/console.sock"))
-        .with_root_path("test")
+        .with_root_path(root)
         .expect("invalid root path")
         .validate_id()?
-        .as_init("test")
+        .as_init(root)
         .with_systemd(false)
         .with_detach(false)
         .build()?;
@@ -253,9 +264,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    let args = Args::parse();
+
+    std::fs::create_dir_all(&args.path)?;
+    let rootfs = &Path::join(&args.path, "rootfs");
+
     let image_data = pull_image("docker.io/library/alpine:latest").await?;
-    unpack_image(image_data).await?;
-    spec()?;
-    run_container()?;
+    unpack_image(image_data, rootfs).await?;
+    spec(&args.path)?;
+    run_container(&args.path)?;
     Ok(())
 }

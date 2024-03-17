@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.81"
 async-std = "1.10.0"
+clap = { version = "4.5.3", features = ["derive"] }
 flate2 = "1.0.22"
 libcontainer = "0.3.2"
 nix = "0.27.1"

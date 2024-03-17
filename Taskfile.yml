@@ -13,7 +13,7 @@ tasks:
     env:
       RUST_LOG: info,libcgroups=debug,libcontainer=debug
     cmds:
-      - ./target/debug/oci-test
+      - ./target/debug/oci-test {{ .CLI_ARGS }}
 
   update:
     desc: Update all dependencies
