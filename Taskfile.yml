@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+tasks:
+  default:
+    deps: [build]
+
+  build: cargo build
+
+  run:
+    deps: [build]
+    env:
+      RUST_LOG: info,libcgroups=debug,libcontainer=debug
+    cmds:
+      - ./target/debug/oci-test
