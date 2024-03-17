@@ -22,6 +22,9 @@
         devPkgs = with pkgs; [
           git
           go-task
+          libseccomp
+          openssl
+          pkg-config
           rust-analyzer
           rustToolchain
         ];
@@ -50,7 +53,7 @@
         };
       });
 
-      devShells = forEachSupportedSystem ({ pkgs, devPkgs, ... }: {
+      devShells = forEachSupportedSystem ({ pkgs, devPkgs, lib }: {
         default = pkgs.mkShell {
           packages = devPkgs;
           env = {
