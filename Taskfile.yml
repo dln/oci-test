@@ -14,3 +14,19 @@ tasks:
       RUST_LOG: info,libcgroups=debug,libcontainer=debug
     cmds:
       - ./target/debug/oci-test
+
+  update:
+    desc: Update all dependencies
+    cmds:
+      - task: update:nix-pkgs
+      - task: update:rust-deps
+
+  update:rust-deps:
+    desc: Update rust dependencies
+    cmds:
+      - cargo update
+
+  update:nix-pkgs:
+    desc: Update nix flake packages
+    cmds:
+      - nix flake update
